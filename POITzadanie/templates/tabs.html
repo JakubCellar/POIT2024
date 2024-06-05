@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>jQuery UI Tabs - Open on mouseover</title>
+    <link rel="stylesheet" href="static/jquery-ui.min.css">
+    <style>
+        .led-off {
+            background-color: green;
+        }
+        
+        .led-on {
+            background-color: red;
+        }
+    </style>
+    <script src="static/jquery-3.2.1.min.js"></script>
+    <script src="static/jquery-ui.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/3.0.5/socket.io.min.js"></script>
+    <script src="static/libs/plotly-latest.min.js"></script>
+    <script src="static/libs/gauge.min.js"></script>
+    <script>
+        $(function() {
+            $("#tabs").tabs({
+                event: "mouseover"
+            });
+        });
+
+        $(document).ready(function () {
+            var socket;
+
+            function initSocket() {
+                socket = io.connect('http://' + document.domain + ':' + location.port + '/test');
+
+                socket.on('connect', function () {
+                    console.log("Connected to server");
+                });
+
+                socket.on('my_response', function (msg) {
+                    console.log("Received message:", msg.data);
+                    $('#log').append('Received: ' + msg.data + '<br>').html();
+                    $('#log2').append('Received: ' + msg.data + '<br>').html();
+                    $('#log3').append('Received: ' + msg.data + '<br>').html();
+
+                    gauge.value = msg.data;
+
+                    var now = new Date();
+                    var time = now.getHours() + ":" + now.getMinutes() + ":" + now.getSeconds();
+
+                    x.push(time); // Pridanie času na os x
+                    y.push(msg.data); // Pridanie hodnoty na os y
+
+                    var trace = {
+                        x: x,
+                        y: y,
+                        mode: 'lines+markers' // Zmena režimu na čiarový s bodmi
+                    };
+
+                    var layout = {
+                        title: 'Data',
+                        xaxis: {
+                            title: 'cas',
+                            type: 'category' // Nastavenie typu osi x na kategorický
+                        },
+                        yaxis: {
+                            title: 'intenzita svetla'
+                        }
+                    };
+
+                    Plotly.newPlot($('#plotdiv')[0], [trace], layout);
+                });
+
+                $('#toggleLedButton').click(function() {
+                    socket.emit('led_control', { action: 'toggle' });
+                    $(this).toggleClass('led-on led-off'); // Zmena farby tlačidla
+                });
+
+                $('#disconnectButton').click(function() {
+                    socket.emit('disconnect_request');
+                });
+
+                $('#closeButton').click(function() {
+                    socket.emit('close_request');
+                });
+            }
+
+            var x = [];
+            var y = [];
+
+            var gauge = new RadialGauge({
+                renderTo: 'canvasID',
+                width: 400,
+                height: 400,
+                units: "Intenzita osvetlenia",
+                minValue: 0,
+                maxValue: 1024,
+                majorTicks: [
+                    "0", "100", "200", "300", "400", "500",
+                    "600", "700", "800", "900", "1000"],
+                minorTicks: 2,
+                strokeTicks: true,
+                highlights: [{
+                    "from": 0.5,
+                    "to": 1,
+                    "color": "rgba(200, 50, 50, .75)"
+                }],
+                colorPlate: "#fff",
+                borderShadowWidth: 0,
+                borders: false,
+                needleType: "arrow",
+                needleWidth: 2,
+                needleCircleSize: 7,
+                needleCircleOuter: true,
+                needleCircleInner: false,
+                animationDuration: 1500,
+                animationRule: "linear"
+            });
+
+            gauge.draw();
+            gauge.value = "0";
+
+            $('#connectButton').click(function() {
+                initSocket(); // inicializujeme spojenie pri stlačení tlačidla Start
+                $('#toggleLedButton').prop('disabled', false);
+                $('#disconnectButton').prop('disabled', false);
+                $('#closeButton').prop('disabled', false);
+            });
+
+            $('#disconnectButton').click(function() {
+                socket.disconnect();
+                $('#toggleLedButton').prop('disabled', true);
+                $('#disconnectButton').prop('disabled', true);
+                $('#closeButton').prop('disabled', true);
+            });
+        });
+    </script>
+</head>
+<body>
+    <div id="tabs">
+        <ul>
+            <li><a href="#tabs-1">Cislicove</a></li>
+            <li><a href="#tabs-2">Graf</a></li>
+            <li><a href="#tabs-3">Budik</a></li>
+        </ul>
+        <div id="tabs-1">
+            <h1>Intenzita osvetlenia</h1>
+            <button id="connectButton">Start</button>
+            <button id="toggleLedButton" class="led-off" disabled>Zapnutie/Vypnutie LED</button>
+            <button id="disconnectButton" disabled>Stop</button>
+            <button id="closeButton" disabled>Close</button>
+            <h2>Received:</h2>
+            <div id="log"></div>
+        </div>
+        <div id="tabs-2">
+            <div id="plotdiv" style="width:600px;height:250px;"></div>
+            <h2>Received:</h2>
+            <div id="log2"></div>
+        </div>
+        <div id="tabs-3">
+            <canvas id="canvasID"></canvas>
+            <div id="log3"></div>
+        </div>
+    </div>
+</body>
+</html>
+
+
